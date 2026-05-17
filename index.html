@@ -13,7 +13,7 @@
   #ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;display:flex;align-items:center;justify-content:center;z-index:10;}
   .screen{display:none;flex-direction:column;align-items:center;justify-content:center;gap:0;pointer-events:all;text-align:center;}
   .screen.active{display:flex;}
-  #startScreen,#gameoverScreen{background:rgba(10,0,20,0.92);border:3px solid #e8a0b4;padding:32px 40px;box-shadow:0 0 0 6px #0a0010,0 0 0 9px #9b8ec4,0 0 40px rgba(232,160,180,0.3);border-radius:2px;}
+  #startScreen,#gameoverScreen{background:rgba(10,0,20,0.92);border:3px solid #e8a0b4;padding:32px 40px;box-shadow:0 0 0 6px #0a0010,0 0 0 9px #9b8ec4,0 0 40px rgba(232,160,180,0.3);border-radius:2px;max-height:95vh;overflow-y:auto;}
   .game-title{font-family:'Press Start 2P',monospace;font-size:18px;color:#e8a0b4;text-shadow:3px 3px 0 #7a3050,6px 6px 0 #3a0028;letter-spacing:1px;line-height:1.8;margin-bottom:20px;}
   .game-subtitle{font-family:'Press Start 2P',monospace;font-size:8px;color:#9b8ec4;margin-bottom:28px;letter-spacing:1px;line-height:1.6;}
   .score-display{font-family:'Press Start 2P',monospace;font-size:8px;color:#c9a96e;margin-bottom:22px;line-height:2;}
@@ -28,6 +28,18 @@
   @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
   .new-record{font-family:'Press Start 2P',monospace;font-size:8px;color:#c9a96e;text-shadow:2px 2px 0 #8b6a30;animation:blink 0.8s step-end infinite;margin-bottom:12px;}
   #liveScore{position:absolute;top:24px;left:50%;transform:translateX(-50%);font-family:'Press Start 2P',monospace;font-size:14px;color:#fff;text-shadow:2px 2px 0 #000;pointer-events:none;display:none;text-align:center;line-height:2;}
+  #weatherAlert{font-size:9px;color:#fff;text-shadow:2px 2px 0 #000;margin-top:4px;letter-spacing:1px;animation:blink 0.5s step-end 6;}
+  #leaderboard{margin-top:16px;width:280px;max-height:220px;overflow-y:auto;border:2px solid #3a2050;background:#0d0118;}
+  #leaderboard::-webkit-scrollbar{width:4px;}
+  #leaderboard::-webkit-scrollbar-track{background:#0a0010;}
+  #leaderboard::-webkit-scrollbar-thumb{background:#9b8ec4;}
+  .lb-title{font-family:'Press Start 2P',monospace;font-size:7px;color:#9b8ec4;padding:8px;border-bottom:1px solid #3a2050;letter-spacing:1px;}
+  .lb-row{display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-bottom:1px solid #1a0828;font-family:'Press Start 2P',monospace;font-size:6px;}
+  .lb-row.me{background:#1a0828;color:#e8a0b4;}
+  .lb-rank{color:#6a6480;width:20px;flex-shrink:0;}
+  .lb-name{color:#c9a96e;flex:1;text-align:left;padding:0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lb-score{color:#6ec4b0;width:40px;text-align:right;flex-shrink:0;}
+  .lb-loading{font-family:'Press Start 2P',monospace;font-size:7px;color:#6a6480;padding:16px;text-align:center;}
 </style>
 </head>
 <body>
@@ -49,11 +61,16 @@
       <button class="share-btn" id="xShareBtn">𝕏 SHARE SCORE</button>
       <button class="share-btn" id="xCopyBtn" style="color:#c9a96e;border-color:#8b6a30;">📋 COPY CARD</button>
     </div>
+    <div id="leaderboard">
+      <div class="lb-title">🏆 TOP 50 LEADERBOARD</div>
+      <div id="lbBody"><div class="lb-loading">LOADING...</div></div>
+    </div>
     <div class="hint-text" id="statusHint">SPACE TO RETRY</div>
   </div>
   <div id="liveScore">
     <span id="hudScore">0</span><br/>
     <span style="font-size:8px;color:#c9a96e;" id="hudHi">BEST: 0</span>
+    <div id="weatherAlert" style="display:none;"></div>
   </div>
 </div>
 <script>
@@ -62,7 +79,6 @@ const ctx=canvas.getContext('2d');
 ctx.imageSmoothingEnabled=false;
 let W,H;
 
-// --- TRUE FULLSCREEN VIEWPORT SCALING ---
 function resize(){
   W=window.innerWidth;
   H=window.innerHeight;
@@ -74,7 +90,7 @@ window.addEventListener('resize',resize);
 
 function px(x,y,w,h,color){ctx.fillStyle=color;ctx.fillRect(Math.round(x),Math.round(y),w,h);}
 
-// --- WEB AUDIO API ENGINE (NO EXTERNAL AUDIO FILES REQUIRED) ---
+// --- WEB AUDIO API ENGINE ---
 const AudioEngine = {
   ctx: null,
   musicInterval: null,
@@ -92,8 +108,8 @@ const AudioEngine = {
   },
   playCoin() {
     this.init(); const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
-    osc.type = 'sine'; osc.frequency.setValueAtTime(587.33, this.ctx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, this.ctx.currentTime + 0.08); // A5
+    osc.type = 'sine'; osc.frequency.setValueAtTime(587.33, this.ctx.currentTime);
+    osc.frequency.setValueAtTime(880, this.ctx.currentTime + 0.08);
     gain.gain.setValueAtTime(0.2, this.ctx.currentTime); gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
     osc.connect(gain); gain.connect(this.ctx.destination); osc.start(); osc.stop(this.ctx.currentTime + 0.25);
   },
@@ -114,7 +130,6 @@ const AudioEngine = {
   startMusic() {
     this.init(); this.stopMusic();
     let tempo = 135, beat = 60 / tempo, index = 0;
-    // Retro Game Melody Notes
     const melody = [293.66, 329.63, 349.23, 392.00, 440.00, 392.00, 349.23, 329.63, 261.63, 293.66, 329.63, 349.23, 293.66, 0, 440.00, 392.00];
     this.musicInterval = setInterval(() => {
       if (state !== STATE.PLAYING) return;
@@ -132,16 +147,84 @@ const AudioEngine = {
 };
 
 const STATE={START:0,PLAYING:1,DEAD:2};
+const WEATHER={SUNNY:0,RAINY:1,THUNDERSTORM:2,SNOWING:3};
+
+// --- SUPABASE CONFIG ---
+const SUPABASE_URL = 'https://jfvxhredhnsuggvigeuh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdnhocmVkaG5zdWdndmlnZXVoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMDkzMjAsImV4cCI6MjA5NDU4NTMyMH0.PUv68bG0FQdlRfQr4HKdD5NCQsEb6RSSMX1IaMAjQAs';
+
+async function sbFetch(path, opts={}){
+  const res = await fetch(SUPABASE_URL + path, {
+    ...opts,
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', ...(opts.headers||{}) }
+  });
+  const text = await res.text();
+  if(!text) return null;
+  const data = JSON.parse(text);
+  if(!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+async function submitScore(name, score){
+  await sbFetch('/rest/v1/scores', { method:'POST', body: JSON.stringify({name, score}), headers:{'Prefer':'return=minimal'} });
+}
+
+async function fetchLeaderboard(){
+  return sbFetch('/rest/v1/scores?select=name,score&order=score.desc&limit=50');
+}
+
+// --- PLAYER NAME ---
+let playerName = localStorage.getItem('beaks_flap_name') || '';
+
+function promptPlayerName(){
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,0,20,0.97);display:flex;align-items:center;justify-content:center;z-index:999;';
+    overlay.innerHTML = `
+      <div style="text-align:center;padding:32px;border:3px solid #e8a0b4;background:#0a0010;box-shadow:0 0 0 6px #0a0010,0 0 0 9px #9b8ec4;">
+        <div style="font-family:'Press Start 2P',monospace;font-size:13px;color:#e8a0b4;margin-bottom:24px;line-height:1.8;">ENTER YOUR NAME<br/><span style="font-size:8px;color:#9b8ec4;">OR X HANDLE</span></div>
+        <input id="nameInput" maxlength="20" placeholder="@yourname" style="font-family:'Press Start 2P',monospace;font-size:10px;background:#1a0828;color:#fff;border:2px solid #9b8ec4;padding:10px 14px;outline:none;width:220px;text-align:center;"/>
+        <br/><br/>
+        <button id="nameBtn" style="font-family:'Press Start 2P',monospace;font-size:9px;color:#0a0010;background:#e8a0b4;border:none;padding:12px 24px;cursor:pointer;box-shadow:4px 4px 0 #7a3050;">▶ PLAY</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#nameInput');
+    const btn = overlay.querySelector('#nameBtn');
+    input.focus();
+    const confirm = () => {
+      const val = input.value.trim();
+      if(!val) return;
+      playerName = val;
+      localStorage.setItem('beaks_flap_name', playerName);
+      document.body.removeChild(overlay);
+      resolve();
+    };
+    btn.addEventListener('click', confirm);
+    input.addEventListener('keydown', e => { if(e.key==='Enter') confirm(); });
+  });
+}
+
 let state=STATE.START,score=0,hiScore=parseInt(localStorage.getItem('beaks_flap_hi')||'0'),frame=0;
+let currentWeather=WEATHER.SUNNY;
+let weatherParticles=[];
+let lightningFlash=0;
 
 const BIRD={
-  x:120,y:200,vy:0,gravity:0.42,flapPower:-7.8,
+  x:120,y:200,vy:0,gravity:0.27,flapPower:-5.8,
   width:52,height:46,angle:0,wingFrame:0,wingTimer:0,
-  dead:false,deathTimer:0,
-  reset(){this.y=H*0.4;this.vy=0;this.angle=0;this.dead=false;this.deathTimer=0;this.wingFrame=0;this.wingTimer=0;},
-  flap(){if(this.dead)return;this.vy=this.flapPower;this.wingFrame=1;this.wingTimer=8;AudioEngine.playFlap();},
+  dead:false,deathTimer:0,hitWater:false,
+  reset(){this.y=H*0.4;this.vy=0;this.angle=0;this.dead=false;this.deathTimer=0;this.wingFrame=0;this.wingTimer=0;this.hitWater=false;},
+  flap(){if(this.dead)return;this.vy = this.flapPower * 0.95;this.wingFrame=1;this.wingTimer=8;AudioEngine.playFlap();},
   update(){
-    if(this.dead){this.deathTimer++;this.vy+=this.gravity*1.5;this.y+=this.vy;return;}
+    if(this.dead){
+      this.deathTimer++;
+      if(this.hitWater){
+        // frozen at water surface — no further movement
+        return;
+      }
+      this.vy+=this.gravity*1.5;this.y+=this.vy;
+      return;
+    }
     this.vy+=this.gravity;this.y+=this.vy;
     this.angle=Math.min(Math.PI/4,Math.max(-Math.PI/5,this.vy*0.06));
     this.wingTimer--;if(this.wingTimer<=0)this.wingFrame=0;
@@ -194,26 +277,34 @@ const BIRD={
 };
 
 const BG={
-  skyColors:['#1a0628','#3a1050','#6a2870','#c05080','#e87060','#f0a858'],
-  stars:[],clouds:[],islands:[],water:{x:0},
+  skyThemes:{
+    [WEATHER.SUNNY]: ['#1a0628','#3a1050','#6a2870','#c05080','#e87060','#f0a858'],
+    [WEATHER.RAINY]: ['#0d0418','#1a0c2a','#2d1b40','#442f56','#5b466d','#725d84'],
+    [WEATHER.THUNDERSTORM]: ['#05010a','#0e051a','#180d2b','#24163a','#31214a','#3f2d59'],
+    [WEATHER.SNOWING]: ['#0b1426','#16233b','#263754','#3c5075','#596d96','#7c92bd']
+  },
+  stars:[],clouds:[],water:{x:0},
   init(){
     this.stars=[];
     for(let i=0;i<120;i++)this.stars.push({x:Math.random()*W,y:Math.random()*H*0.6,size:Math.random()<0.3?2:1,twinkle:Math.random()*30|0});
     this.clouds=[];
     for(let i=0;i<9;i++)this.clouds.push({x:Math.random()*W,y:30+Math.random()*120,speed:0.3+Math.random()*0.3,w:50+Math.random()*80|0});
-    this.islands=[];
-    for(let i=0;i<6;i++)this.islands.push({x:i*(W/4)+Math.random()*60,y:H-180-Math.random()*40,speed:0.6,w:90+Math.random()*70|0,h:40+Math.random()*30|0});
   },
   update(speed){
     this.water.x=(this.water.x+speed*0.8)%16;
     this.clouds.forEach(c=>{c.x-=c.speed*(speed/3);if(c.x+c.w<0)c.x=W+20;});
-    this.islands.forEach(i=>{i.x-=i.speed*(speed/3);if(i.x+i.w<0)i.x=W+20+Math.random()*100;});
   },
   drawSky(){
-    const bands=this.skyColors.length;
+    if (lightningFlash > 0) {
+      ctx.fillStyle = `rgba(220, 230, 255, ${lightningFlash * 0.15})`;
+      ctx.fillRect(0,0,W,H);
+      return;
+    }
+    const colors=this.skyThemes[currentWeather];
+    const bands=colors.length;
     const bandH=(H*0.75)/(bands-1);
     for(let b=0;b<bands-1;b++){
-      const c1=this.skyColors[b],c2=this.skyColors[b+1];
+      const c1=colors[b],c2=colors[b+1];
       const y0=b*bandH,y1=(b+1)*bandH;
       for(let y=Math.floor(y0);y<Math.floor(y1);y++){
         const t=(y-y0)/(y1-y0);
@@ -225,12 +316,14 @@ const BG={
     }
   },
   drawStars(){
+    if(currentWeather === WEATHER.RAINY || currentWeather === WEATHER.THUNDERSTORM) return;
     this.stars.forEach(s=>{
       if((frame+s.twinkle)%40>=32)return;
       ctx.fillStyle='#f0e8d8';ctx.fillRect(Math.round(s.x),Math.round(s.y),s.size,s.size);
     });
   },
   drawSun(){
+    if(currentWeather !== WEATHER.SUNNY) return;
     const sx=W*0.85,sy=H*0.2;
     for(let dy=-16;dy<=16;dy+=2){
       for(let dx=-16;dx<=16;dx+=2){
@@ -242,39 +335,88 @@ const BG={
   drawClouds(){
     this.clouds.forEach(c=>{
       const cx=Math.round(c.x),cy=Math.round(c.y);
-      ctx.fillStyle='#e8d0e0';
+      ctx.fillStyle=currentWeather===WEATHER.SUNNY?'#e8d0e0':currentWeather===WEATHER.SNOWING?'#cbd3e3':'#483c54';
       ctx.fillRect(cx,cy+8,c.w,10);ctx.fillRect(cx+8,cy+2,c.w-16,10);ctx.fillRect(cx+16,cy-2,c.w-28,10);
     });
   },
   drawPalmTree(x,y){
     ctx.fillStyle='#8b5a2b';ctx.fillRect(x,y-24,4,26);
-    ctx.fillStyle='#2a7830';
+    ctx.fillStyle=currentWeather===WEATHER.SNOWING?'#49634d':'#2a7830';
     ctx.fillRect(x-16,y-28,18,4);ctx.fillRect(x+2,y-28,18,4);
+    if(currentWeather===WEATHER.SNOWING){
+      ctx.fillStyle='#ffffff';ctx.fillRect(x-12,y-30,10,2);ctx.fillRect(x+4,y-30,10,2);
+    }
   },
   drawIslands(){
     this.islands.forEach(isl=>{
       const ix=Math.round(isl.x),iy=Math.round(isl.y);
-      ctx.fillStyle='#2a6030';ctx.fillRect(ix,iy+isl.h-10,isl.w,10);
-      ctx.fillStyle='#3a8040';ctx.fillRect(ix+4,iy+isl.h-16,isl.w-8,10);
-      ctx.fillStyle='#c8a870';ctx.fillRect(ix,iy+isl.h,isl.w,6);
+      ctx.fillStyle=currentWeather===WEATHER.SNOWING?'#426e49':'#2a6030';
+      ctx.fillRect(ix,iy+isl.h-10,isl.w,10);
+      ctx.fillStyle=currentWeather===WEATHER.SNOWING?'#609669':'#3a8040';
+      ctx.fillRect(ix+4,iy+isl.h-16,isl.w-8,10);
+      ctx.fillStyle=currentWeather===WEATHER.SNOWING?'#e2ecf7':'#c8a870';
+      ctx.fillRect(ix,iy+isl.h,isl.w,6);
       this.drawPalmTree(ix+isl.w*0.3|0,iy+isl.h-14);
     });
   },
   drawWater(){
-    const wy=H-90;
-    ctx.fillStyle='#1a3870';ctx.fillRect(0,wy,W,90);
-    ctx.fillStyle='#2a4890';ctx.fillRect(0,wy,W,8);
-    ctx.fillStyle='#3a60b0';
-    for(let wx=-16+Math.round(this.water.x);wx<W+16;wx+=32)ctx.fillRect(wx,wy+2,16,4);
-    ctx.fillStyle='#0a1840';ctx.fillRect(0,H-40,W,40);
+  const wy = H - 90;
+
+  // water base
+  ctx.fillStyle = currentWeather === WEATHER.SNOWING ? '#224263' : '#1a3870';
+  ctx.fillRect(0, wy, W, 90);
+
+  // wave layers
+  const waveSpeed = this.water.x * 0.6;
+
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = i === 0 ? '#2a4890' : i === 1 ? '#3a60b0' : '#4a78d0';
+
+    for (let x = -32; x < W + 32; x += 32) {
+      const offset = Math.sin((x + waveSpeed * 2 + i * 40) * 0.01) * (2 + i);
+      ctx.fillRect(x + (waveSpeed % 32), wy + 10 + i * 8 + offset, 24, 4);
+    }
+  }
+
+  // boat (NEW FEATURE)
+  const boatX = (W * 0.5) + Math.sin(frame * 0.02) * 40;
+  const boatY = wy + 18 + Math.sin(frame * 0.05) * 3;
+
+  // hull
+  ctx.fillStyle = '#3a1f1f';
+  ctx.fillRect(boatX, boatY, 70, 12);
+
+  ctx.fillStyle = '#5a2a2a';
+  ctx.fillRect(boatX + 4, boatY - 4, 62, 6);
+
+  // mast
+  ctx.fillStyle = '#c9a96e';
+  ctx.fillRect(boatX + 35, boatY - 30, 3, 26);
+
+  // sail
+  ctx.fillStyle = '#e8e8ff';
+  ctx.beginPath();
+  ctx.moveTo(boatX + 38, boatY - 28);
+  ctx.lineTo(boatX + 38, boatY - 5);
+  ctx.lineTo(boatX + 62, boatY - 15);
+  ctx.closePath();
+  ctx.fill();
+
+  // reflection ripple
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(boatX, wy + 32, 70, 2);
+
+  // bottom darkness strip
+  ctx.fillStyle = '#0a1840';
+  ctx.fillRect(0, H - 40, W, 40);
   }
 };
 
-const PIPE_W=56,PIPE_GAP=200;
+const PIPE_W=80,PIPE_GAP=300;
 let pipes=[],pipeTimer=0,particles=[],scorePops=[];
 
 function spawnPipe(){
-  const gapY=100+Math.random()*(H-360);
+const gapY=120+Math.random()*(H-420);
   const hasCoin=Math.random()<0.6;
   pipes.push({x:W+40,gapTop:gapY,gapBot:gapY+PIPE_GAP,passed:false,
     coin:hasCoin?{x:W+40+PIPE_W/2,y:gapY+PIPE_GAP/2,collected:false,spin:0}:null});
@@ -282,11 +424,17 @@ function spawnPipe(){
 
 function drawPillar(x,y,height,isTop){
   if(height<=0)return;
-  ctx.fillStyle='#3a5028';ctx.fillRect(x,y,PIPE_W,height);
-  ctx.fillStyle='#4a6030';ctx.fillRect(x+PIPE_W-6,y,6,height);
+  ctx.fillStyle=currentWeather===WEATHER.SNOWING?'#2a454e':'#3a5028';
+  ctx.fillRect(x,y,PIPE_W,height);
+  ctx.fillStyle=currentWeather===WEATHER.SNOWING?'#3b5a66':'#4a6030';
+  ctx.fillRect(x+PIPE_W-6,y,6,height);
   const capH=16,capX=x-6,capW=PIPE_W+12;
   const capY=isTop?y+height-capH:y;
-  ctx.fillStyle='#4a6030';ctx.fillRect(capX,capY,capW,capH);
+  ctx.fillStyle=currentWeather===WEATHER.SNOWING?'#3b5a66':'#4a6030';
+  ctx.fillRect(capX,capY,capW,capH);
+  if(currentWeather===WEATHER.SNOWING && !isTop){
+    ctx.fillStyle='#ffffff';ctx.fillRect(capX,capY,capW,3);
+  }
 }
 
 function drawCoin(coin) {
@@ -299,13 +447,11 @@ function drawCoin(coin) {
   const cx = Math.round(coin.x - w / 2);
   const cy = Math.round(coin.y - h / 2);
 
-  // Retro 8-bit round coin outline & coloring
-  px(cx, cy + 2, w, h - 4, '#5e3a00'); // Shadow border
-  px(cx + 1, cy + 1, Math.max(1, w - 2), h - 2, '#8b6a15'); // Dark gold rim
-  px(cx + 2, cy + 2, Math.max(1, w - 4), h - 4, '#c9a96e'); // Main body
-  px(cx + 3, cy + 3, Math.max(1, w - 6), h - 6, '#f0d080'); // Inner sheen
+  px(cx, cy + 2, w, h - 4, '#5e3a00');
+  px(cx + 1, cy + 1, Math.max(1, w - 2), h - 2, '#8b6a15');
+  px(cx + 2, cy + 2, Math.max(1, w - 4), h - 4, '#c9a96e');
+  px(cx + 3, cy + 3, Math.max(1, w - 6), h - 6, '#f0d080');
   
-  // High-contrast pixel details for the coin face inner indentation
   if (w > 6) {
     px(cx + Math.round(w * 0.4), cy + 5, 2, h - 10, '#8b6a15');
   }
@@ -321,11 +467,92 @@ function spawnDeathEffect(x,y){
   for(let i=0;i<25;i++)particles.push({x,y,vx:(Math.random()-0.5)*10,vy:(Math.random()-0.5)*10-2,life:45,maxLife:45,color:'#e8a0b4',size:4});
 }
 
-// Adjusted hitboxes slightly for 4.5+ speeds to prevent unfair clipping
+function spawnSplashEffect(x,y){
+  const colors=['#ffffff','#a8d8f0','#c8eeff','#7abcdc','#dff4ff'];
+  // upward radial burst
+  for(let i=0;i<28;i++){
+    const a=Math.PI+Math.random()*Math.PI; // upward arc (180° spread)
+    const spd=2+Math.random()*6;
+    const col=colors[Math.floor(Math.random()*colors.length)];
+    particles.push({
+      x:x+(Math.random()-0.5)*20,
+      y,
+      vx:Math.cos(a)*spd,
+      vy:Math.sin(a)*spd,
+      life:35+Math.random()*20|0,
+      maxLife:55,
+      color:col,
+      size:Math.random()<0.4?4:2
+    });
+  }
+  // small side droplets
+  for(let i=0;i<10;i++){
+    const side=i%2===0?1:-1;
+    particles.push({
+      x:x+side*(10+Math.random()*30),
+      y:y+Math.random()*4,
+      vx:side*(1+Math.random()*3),
+      vy:-(1+Math.random()*3),
+      life:20+Math.random()*15|0,
+      maxLife:35,
+      color:'#c8eeff',
+      size:2
+    });
+  }
+}
+
+function updateWeatherSystem() {
+  const calculatedWeather = Math.floor(score / 15) % 4;
+  if(calculatedWeather !== currentWeather) {
+    currentWeather = calculatedWeather;
+    triggerWeatherAlert();
+  }
+
+  if(currentWeather === WEATHER.RAINY) {
+    if(Math.random() < 0.4) weatherParticles.push({x: Math.random()*W, y: -10, vy: 10+Math.random()*5, vx: -2, type: 'rain', size: 2});
+  } else if(currentWeather === WEATHER.THUNDERSTORM) {
+    if(Math.random() < 0.7) weatherParticles.push({x: Math.random()*W, y: -10, vy: 14+Math.random()*6, vx: -3, type: 'rain', size: 2});
+    if(lightningFlash > 0) lightningFlash--;
+    if(Math.random() < 0.006 && lightningFlash === 0) lightningFlash = 5 + Math.floor(Math.random()*6);
+  } else if(currentWeather === WEATHER.SNOWING) {
+    if(Math.random() < 0.2) weatherParticles.push({x: Math.random()*W, y: -10, vy: 1.5+Math.random()*2, vx: -1 + Math.random()*2, type: 'snow', size: 2+Math.random()*3|0, swing: Math.random()*10});
+  }
+
+  weatherParticles.forEach(p => {
+    p.y += p.vy;
+    if(p.type === 'snow') {
+      p.swing += 0.03;
+      p.x += p.vx + Math.sin(p.swing)*0.5;
+    } else {
+      p.x += p.vx;
+    }
+  });
+  weatherParticles = weatherParticles.filter(p => p.y < H && p.x > 0 && p.x < W);
+}
+
+function drawWeatherSystem() {
+  weatherParticles.forEach(p => {
+    if(p.type === 'rain') {
+      ctx.fillStyle = currentWeather === WEATHER.THUNDERSTORM ? 'rgba(130,160,220,0.45)' : 'rgba(150,180,220,0.35)';
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, 12);
+    } else if(p.type === 'snow') {
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+    }
+  });
+}
+
+function triggerWeatherAlert() {
+  const alertDiv = document.getElementById('weatherAlert');
+  const titles = ["FORECAST: SUNNY", "FORECAST: RAINY", "FORECAST: THUNDERSTORM", "FORECAST: BLIZZARD"];
+  alertDiv.textContent = titles[currentWeather];
+  alertDiv.style.display = 'block';
+  setTimeout(() => { alertDiv.style.display = 'none'; }, 3000);
+}
+
 function checkCollision(pipe){
   const bx=BIRD.x+14,by=BIRD.y+14,bw=BIRD.width-28,bh=BIRD.height-26;
   if(bx+bw>pipe.x&&bx<pipe.x+PIPE_W&&(by<pipe.gapTop||by+bh>pipe.gapBot))return true;
-  if(BIRD.y+BIRD.height>H-40||BIRD.y<-50)return true;
   return false;
 }
 
@@ -335,12 +562,52 @@ function checkCoin(coin){
   return Math.sqrt(dx*dx+dy*dy)<34;
 }
 
-function getSpeed(){return Math.min(4.5 + score * 0.06, 8.0);}
-function getInterval(){return Math.max(42, 95 - score * 1.5);}
+// --- CALMED DOWN VELOCITY PROFILE ---
+function getSpeed(){return Math.min(2.2 + score * 0.02, 4.2);}
+function getInterval(){return Math.max(85, 160 - score * 1.2);}
 
-function startGame(){
+// --- MILESTONE SYSTEM ---
+const MILESTONES = [10, 25, 50, 100, 150, 200];
+let milestoneFlash = 0;        // screen flash alpha (0-1)
+let screenShake = 0;           // shake frames remaining
+let milestonePops = [];        // big canvas text pops
+
+function checkMilestone(newScore){
+  if(!MILESTONES.includes(newScore)) return;
+  milestoneFlash = 1.0;
+  screenShake = 18;
+  const labels = {10:'NICE!',25:'GREAT!',50:'ON FIRE!',100:'BEAST MODE!',150:'LEGENDARY!',200:'GODLIKE!'};
+  milestonePops.push({
+    text: labels[newScore] || newScore+'!',
+    sub: newScore + ' POINTS',
+    x: W/2, y: H*0.35,
+    life: 90, maxLife: 90,
+    scale: 0
+  });
+  AudioEngine.playMilestone();
+}
+
+// Add milestone sound to AudioEngine
+AudioEngine.playMilestone = function(){
+  this.init();
+  const t = this.ctx.currentTime;
+  const freqs = [523.25, 659.25, 783.99, 1046.5];
+  freqs.forEach((f, i) => {
+    const osc = this.ctx.createOscillator(), gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(f, t + i * 0.07);
+    gain.gain.setValueAtTime(0.12, t + i * 0.07);
+    gain.gain.linearRampToValueAtTime(0.001, t + i * 0.07 + 0.15);
+    osc.connect(gain); gain.connect(this.ctx.destination);
+    osc.start(t + i * 0.07); osc.stop(t + i * 0.07 + 0.15);
+  });
+};
+
+async function startGame(){
+  if(!playerName){ await promptPlayerName(); }
   AudioEngine.init();
-  state=STATE.PLAYING;score=0;pipes=[];pipeTimer=30;particles=[];scorePops=[];
+  gameOverShown=false;
+  state=STATE.PLAYING;score=0;pipes=[];pipeTimer=30;particles=[];scorePops=[];weatherParticles=[];milestonePops=[];milestoneFlash=0;screenShake=0;currentWeather=WEATHER.SUNNY;
   BIRD.reset();BG.init();
   document.getElementById('startScreen').classList.remove('active');
   document.getElementById('gameoverScreen').classList.remove('active');
@@ -355,16 +622,61 @@ function die(){
   BIRD.dead=true;state=STATE.DEAD;
   AudioEngine.playHit();
   AudioEngine.stopMusic();
-  spawnDeathEffect(BIRD.x+BIRD.width/2,BIRD.y+BIRD.height/2);
-  if(score>hiScore){hiScore=score;localStorage.setItem('beaks_flap_hi',hiScore);}
-  setTimeout(showGameOver,1200);
+
+  const waterY = H - 50; // matches BG.drawWater()
+  const hitGroundOrWater = BIRD.y + BIRD.height >= waterY;
+
+  if(hitGroundOrWater){
+    // Snap bird to water surface and freeze
+    BIRD.y = waterY - BIRD.height + 10;
+    BIRD.vy = 0;
+    BIRD.hitWater = true;
+    BIRD.angle = 0.3; // slight tilt on impact
+    spawnSplashEffect(BIRD.x + BIRD.width / 2, waterY);
+    // Slight delay before game over for splash to play out
+    if(score>hiScore){hiScore=score;localStorage.setItem('beaks_flap_hi',hiScore);}
+    setTimeout(showGameOver, 900);
+  } else {
+    // Pipe hit — original behavior
+    spawnDeathEffect(BIRD.x+BIRD.width/2,BIRD.y+BIRD.height/2);
+    if(score>hiScore){hiScore=score;localStorage.setItem('beaks_flap_hi',hiScore);}
+    setTimeout(showGameOver,1200);
+  }
 }
 
-function showGameOver(){
+let gameOverShown = false;
+async function showGameOver(){
+  if(gameOverShown)return;
+  gameOverShown=true;
   document.getElementById('liveScore').style.display='none';
   document.getElementById('gameoverScreen').classList.add('active');
   document.getElementById('goScore').innerHTML='SCORE: '+score+'<br/>BEST: '+hiScore;
   document.getElementById('newRecord').style.display=(score>=hiScore&&score>0)?'block':'none';
+  // submit score then load leaderboard
+  document.getElementById('lbBody').innerHTML='<div class="lb-loading">SAVING...</div>';
+  try {
+    if(score > 0) await submitScore(playerName, score);
+    const rows = await fetchLeaderboard();
+    if(!Array.isArray(rows)||rows.length===0){
+      document.getElementById('lbBody').innerHTML='<div class="lb-loading">NO SCORES YET</div>';
+      return;
+    }
+    let html='';
+    rows.forEach((r,i)=>{
+      const isMe = r.name===playerName && r.score===score;
+      html+=`<div class="lb-row${isMe?' me':''}">
+        <span class="lb-rank">#${i+1}</span>
+        <span class="lb-name">${r.name.replace(/</g,'&lt;')}</span>
+        <span class="lb-score">${r.score}</span>
+      </div>`;
+    });
+    document.getElementById('lbBody').innerHTML=html;
+    // scroll to player's row
+    const meEl = document.querySelector('.lb-row.me');
+    if(meEl) meEl.scrollIntoView({block:'center'});
+  } catch(e){
+    document.getElementById('lbBody').innerHTML=`<div class="lb-loading">ERROR: ${e.message.slice(0,80)}</div>`;
+  }
 }
 
 function updateHUD(){
@@ -427,6 +739,7 @@ function loop(){
   if(state===STATE.PLAYING||state===STATE.DEAD){
     BIRD.update();
     if(state===STATE.PLAYING){
+      updateWeatherSystem();
       pipeTimer--;
       if(pipeTimer<=0){spawnPipe();pipeTimer=getInterval();}
       pipes.forEach(p=>{
@@ -434,6 +747,7 @@ function loop(){
         if(!p.passed&&p.x+PIPE_W<BIRD.x){
           p.passed=true;score++;
           AudioEngine.playScore();
+          checkMilestone(score);
           scorePops.push({x:BIRD.x+20,y:BIRD.y-10,text:'+1',color:'#6ec4b0',life:45,maxLife:45});
           updateHUD();
         }
@@ -447,18 +761,25 @@ function loop(){
         if(checkCollision(p))die();
       });
       pipes=pipes.filter(p=>p.x+PIPE_W+40>0);
+      // standalone ground/ceiling check (fires even with no pipes onscreen)
+      if(BIRD.y+BIRD.height>H-50||BIRD.y<-50)die();
     }
     BG.update(speed);
   }
 
-  BG.drawSky();BG.drawStars();BG.drawSun();BG.drawClouds();BG.drawIslands();BG.drawWater();
+  const shakeX = screenShake>0?(Math.random()-0.5)*5|0:0;
+  ctx.save();
+  ctx.translate(shakeX,0);
+  BG.drawSky();BG.drawStars();BG.drawSun();BG.drawClouds();BG.drawWater();
   pipes.forEach(p=>{
     drawPillar(p.x,0,p.gapTop,true);
     drawPillar(p.x,p.gapBot,H-p.gapBot-40,false);
     if(p.coin)drawCoin(p.coin);
   });
-  drawFloor();
   BIRD.draw();
+  drawWeatherSystem();
+  ctx.restore();
+  drawFloor();
 
   particles=particles.filter(p=>p.life>0);
   particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.15;p.life--;ctx.globalAlpha=p.life/p.maxLife;ctx.fillStyle=p.color;ctx.fillRect(Math.round(p.x),Math.round(p.y),p.size,p.size);});
@@ -467,6 +788,44 @@ function loop(){
   scorePops=scorePops.filter(p=>p.life>0);
   scorePops.forEach(p=>{p.y-=0.8;p.life--;ctx.globalAlpha=p.life/p.maxLife;ctx.fillStyle=p.color;ctx.font='bold 10px "Press Start 2P",monospace';ctx.fillText(p.text,Math.round(p.x),Math.round(p.y));});
   ctx.globalAlpha=1;
+
+  // --- MILESTONE EFFECTS ---
+  if(milestoneFlash>0){
+    ctx.globalAlpha=milestoneFlash*0.25;
+    ctx.fillStyle='#e8a0b4';
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha=1;
+    milestoneFlash=Math.max(0,milestoneFlash-0.06);
+  }
+  if(screenShake>0) screenShake--;
+
+  milestonePops=milestonePops.filter(p=>p.life>0);
+  milestonePops.forEach(p=>{
+    p.life--;
+    const t=p.life/p.maxLife;
+    // scale in fast, hold, then fade out
+    p.scale=p.life>70?1-(p.life-70)/20*0:Math.min(1,(p.maxLife-p.life)/10);
+    const alpha=t<0.25?t*4:1;
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.translate(Math.round(p.x),Math.round(p.y));
+    const sc=0.5+p.scale*0.5;
+    ctx.scale(sc,sc);
+    // shadow
+    ctx.fillStyle='#3a0028';
+    ctx.font='bold 22px "Press Start 2P",monospace';
+    ctx.textAlign='center';
+    ctx.fillText(p.text,3,3);
+    // main text
+    ctx.fillStyle='#e8a0b4';
+    ctx.fillText(p.text,0,0);
+    // sub text
+    ctx.font='10px "Press Start 2P",monospace';
+    ctx.fillStyle='#c9a96e';
+    ctx.fillText(p.sub,0,24);
+    ctx.textAlign='left';
+    ctx.restore();
+  });
 
   if(state===STATE.START){BIRD.y=(H*0.4)+Math.sin(frame*0.06)*12;BIRD.angle=Math.sin(frame*0.04)*0.12;BIRD.draw();}
 
