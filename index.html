@@ -227,7 +227,7 @@ let weatherParticles=[];
 let lightningFlash=0;
 
 const BIRD={
-  x:120,y:200,vy:0,gravity:0.27,flapPower:-5.8,
+  x:120,y:200,vy:0,gravity:0.25,flapPower:-8,
   width:52,height:46,angle:0,wingFrame:0,wingTimer:0,
   dead:false,deathTimer:0,hitWater:false,
   reset(){this.y=H*0.4;this.vy=0;this.angle=0;this.dead=false;this.deathTimer=0;this.wingFrame=0;this.wingTimer=0;this.hitWater=false;},
@@ -580,7 +580,7 @@ function checkCoin(coin){
 }
 
 // --- CALMED DOWN VELOCITY PROFILE ---
-function getSpeed(){return Math.min(2.2 + score * 0.02, 4.2);}
+function getSpeed(){return Math.min(2.2 + score * 0.02, 5);}
 function getInterval(){return Math.max(85, 160 - score * 1.2);}
 
 // --- MILESTONE SYSTEM ---
